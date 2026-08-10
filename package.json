@@ -1,0 +1,32 @@
+{
+  "name": "revolution-realty-treasury-bot",
+  "version": "1.0.0",
+  "description": "Production Discord, contract and DemocracyCraft Treasury system for Revolution Realty.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node scripts/migrate.js && node index.js",
+    "test": "node --test --test-reporter=spec",
+    "test:integration": "node --test --test-reporter=spec test/postgres-integration.test.js",
+    "lint": "eslint index.js setup.js db.js verify.js src scripts test eslint.config.js",
+    "migrate": "node scripts/migrate.js",
+    "migrate:check": "node scripts/migrate.js --check",
+    "legacy:import": "node scripts/import-legacy.js",
+    "properties:preview": "node scripts/seed-properties.js --preview",
+    "properties:apply": "node scripts/seed-properties.js --apply"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.1",
+    "pdfkit": "^0.17.2",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "eslint": "^9.33.0",
+    "globals": "^16.3.0"
+  }
+}

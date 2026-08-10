@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16.9-alpine
+        env:
+          POSTGRES_USER: revolution_realty
+          POSTGRES_PASSWORD: integration_only
+          POSTGRES_DB: revolution_realty_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U revolution_realty -d revolution_realty_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://revolution_realty:integration_only@127.0.0.1:5432/revolution_realty_test
+      PGSSLMODE: disable
+      FINANCE_MODE: shadow
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.22.0"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run migrate
+      - run: npm run migrate:check
+      - run: npm run test:integration
+        env:
+          TEST_DATABASE_URL: postgresql://revolution_realty:integration_only@127.0.0.1:5432/revolution_realty_test
+      - run: npm audit --audit-level=high

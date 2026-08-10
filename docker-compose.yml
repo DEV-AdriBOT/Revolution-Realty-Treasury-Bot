@@ -1,0 +1,75 @@
+services:
+  volumes-init:
+    image: alpine:3.22
+    command: ["sh", "-c", "chown -R 1000:1000 /data /backups"]
+    volumes:
+      - revolution_realty_legacy:/data
+      - revolution_realty_backups:/backups
+    restart: "no"
+
+  db:
+    image: postgres:16.9-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: revolution_realty
+      POSTGRES_USER: revolution_realty
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - revolution_realty_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U revolution_realty -d revolution_realty"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [realty_internal]
+
+  db-tools:
+    image: postgres:16.9-alpine
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://revolution_realty:${POSTGRES_PASSWORD}@db:5432/revolution_realty
+      DATA_DIR: /data
+      BACKUP_DIR: /backups
+    volumes:
+      - ./scripts:/scripts:ro
+      - revolution_realty_legacy:/data:ro
+      - revolution_realty_backups:/backups
+    networks: [realty_internal]
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      volumes-init:
+        condition: service_completed_successfully
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://revolution_realty:${POSTGRES_PASSWORD}@db:5432/revolution_realty
+      PORT: "3000"
+      DATA_DIR: /data
+      BACKUP_DIR: /backups
+    volumes:
+      - revolution_realty_legacy:/data
+      - revolution_realty_backups:/backups
+    ports:
+      - "127.0.0.1:3020:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [realty_internal]
+
+volumes:
+  revolution_realty_postgres:
+  revolution_realty_legacy:
+  revolution_realty_backups:
+
+networks:
+  realty_internal:
+    driver: bridge
