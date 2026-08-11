@@ -85,10 +85,12 @@ concurrent work claims, restart recovery and balanced-ledger enforcement.
 
 ## Deployment
 
-Start with [HOSTING.md](HOSTING.md). Day-to-day procedures and the emergency
-latch are in [OPERATIONS.md](OPERATIONS.md); recovery is in
-[ROLLBACK.md](ROLLBACK.md). Current evidence and external credential gates are
-recorded in [DELIVERABLES.md](DELIVERABLES.md) and
+For Railway, follow the client-ready
+[Railway deployment guide](RAILWAY_DEPLOYMENT.md). For a Linux server, start
+with [HOSTING.md](HOSTING.md). Day-to-day procedures and the emergency latch are
+in [OPERATIONS.md](OPERATIONS.md); recovery is in [ROLLBACK.md](ROLLBACK.md).
+Current evidence and external credential gates are recorded in
+[DELIVERABLES.md](DELIVERABLES.md) and
 [DEPLOYMENT_RECORD.md](DEPLOYMENT_RECORD.md).
 Security and private vulnerability reporting guidance is in
 [SECURITY.md](SECURITY.md).
