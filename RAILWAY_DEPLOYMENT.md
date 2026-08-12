@@ -6,15 +6,77 @@ experience.
 
 The finished Railway project contains:
 
-- one application service built from this GitHub repository;
+- one application service named `Revolution-Realty-Treasury-Bot` built from
+  this GitHub repository;
 - one private PostgreSQL service;
-- one persistent application volume for legacy Discord state and backups; and
 - one HTTPS domain for Treasury webhooks, health checks and single-use account
   connection pages.
 
-Keep exactly one application replica. Railway volumes do not support replicas,
-and running two finance workers against different databases could create
+Keep exactly one application replica. Running two finance workers could create
 duplicate real-money operations.
+
+## Current client project: exact activation walkthrough
+
+Use this section when the developer has already created the Railway project and
+the client only needs to add their credentials.
+
+1. Open the Railway project.
+2. On the project canvas, click the container named
+   **Revolution-Realty-Treasury-Bot**. Do not click `Revolution-Realty-Bot`,
+   `sincere-growth` or `Postgres`.
+3. In the service navigation, click the **Variables** tab.
+4. Click **New Variable** for each missing value, or click an existing variable
+   row to edit it. Enter the following client-controlled values:
+
+   | Variable | What the client enters |
+   |---|---|
+   | `DISCORD_TOKEN` | Newly regenerated Discord bot token |
+   | `TREASURY_BUSINESS_TOKEN` | Revolution Realty BUSINESS Treasury token |
+   | `DC_API_TOKEN` | DemocracyCraft API token used by IGN verification |
+   | `VERIFY_ACCOUNT_ID` | Verification account ID used by the existing Discord verification flow |
+   | `REALTY_PLUGIN_SYSTEM` | Exact value taken from a genuine confirmed Realty posting |
+
+5. Never send these values through Discord, GitHub, a ticket or a normal chat.
+   Enter them directly into Railway. Use the variable three-dot menu to
+   **Seal** the Discord and Treasury tokens after saving.
+6. Leave `FINANCE_MODE=disabled` while entering the credentials. Review the
+   staged changes and click the pink **Deploy** button at the top of Railway.
+7. Open **Deployments**, wait for the newest deployment to show **Active**, and
+   open **View logs**. Confirm that the log contains both the internal HTTP
+   listener and the Discord login message. A secret value must never appear in
+   the log.
+8. Check the public endpoints:
+
+   ```text
+   https://revolution-realty-treasury-bot-production.up.railway.app/healthz
+   https://revolution-realty-treasury-bot-production.up.railway.app/readyz
+   ```
+
+   Both must return HTTP 200. `/readyz` must return
+   `{"ok":true,"missing":[]}`.
+9. In Discord, run `/setup`, then
+   `/finance account account_id:120294`. The second command validates that the
+   BUSINESS token owns the active account and registers its signed webhook.
+10. Have Servalot and summerock verify their Minecraft accounts and run
+    `/finance connect`. Each owner enters their PERSONAL token only on the
+    private, single-use HTTPS page. PERSONAL tokens never belong in Railway.
+11. Run `/finance connections`, `/finance status` and `/finance reconcile`.
+    Confirm the two personal connections, account `120294`, no reconciliation
+    mismatch and no unexpected classified posting.
+12. Trigger one genuine low-value Realty event while finance remains disabled.
+    Confirm its signature, exact memo, account direction and `pluginSystem`.
+    Ambiguous or unmatched activity must remain unclassified.
+13. Return to **Revolution-Realty-Treasury-Bot → Variables**, edit
+    `FINANCE_MODE` from `disabled` to `live`, save and click **Deploy**. Do this
+    only after every previous check passes.
+14. Immediately run `/finance status` again. Keep
+    `/finance emergency-disable confirm:DISABLE` available as the kill switch.
+
+The old `Revolution-Realty-Bot` service is not a dependency after
+`DISCORD_TOKEN` and `VERIFY_ACCOUNT_ID` contain real values in the Treasury
+service. A Railway workspace administrator may then delete the old service and
+its old volume. Never delete `Revolution-Realty-Treasury-Bot`, `Postgres` or
+`sincere-growth`.
 
 ## 1. Before starting
 
@@ -25,7 +87,6 @@ Have the following ready:
 - the public GitHub repository
   `DEV-AdriBOT/Revolution-Realty-Treasury-Bot`;
 - a newly reset Discord bot token;
-- the backed-up legacy `data.json`, if this is replacing an existing bot;
 - the Revolution Realty BUSINESS Treasury key; and
 - access for Servalot and summerock to connect their PERSONAL Treasury keys.
 
@@ -56,7 +117,7 @@ a reference variable. The password never needs to be copied into this repo.
 
 1. Select **New → GitHub Repo**.
 2. Choose `DEV-AdriBOT/Revolution-Realty-Treasury-Bot`.
-3. Rename the service to `Revolution-Realty-Bot`.
+3. Rename the service to `Revolution-Realty-Treasury-Bot`.
 4. In **Settings → Source**, confirm the branch is `main`.
 5. Do not set a custom build or start command. Railway detects the root
    `Dockerfile`; its normal start command applies all SQL migrations before the
@@ -72,36 +133,15 @@ Do not configure a pre-deploy migration command. Railway volumes are unavailable
 during pre-deploy, while the repository's start command already runs migrations
 safely at process startup.
 
-## 4. Attach persistent storage
+## 4. Storage for this fresh installation
 
-The bot keeps imported non-financial Discord state and timestamped legacy
-backups under `/data`. Railway's normal container filesystem is temporary, so a
-volume is required.
+This client installation starts with a clean PostgreSQL database and does not
+import the obsolete bot's `data.json`. Financial and Discord state is stored in
+PostgreSQL. Do not attach the old `revolution-realty-bot-volume` to the Treasury
+service.
 
-1. Open the application service.
-2. Select **Settings → Volumes → Add Volume**.
-3. Mount the volume at `/data`.
-4. Keep the application at one replica. Railway does not allow replicas on a
-   service with a volume.
-
-The image normally runs as the unprivileged `node` user, while Railway mounts
-volumes as `root`. The variable `RAILWAY_RUN_UID=0` in the next section is
-therefore required for this deployment. Do not expose the application volume
-over the public network.
-
-If this is a new database that must import an existing `data.json`, upload the
-backed-up file to the volume as `/data.json` **before the application's first
-successful start**:
-
-```sh
-railway volume browse /
-```
-
-The application sees the uploaded file as `/data/data.json`, creates a
-timestamped backup and imports it into PostgreSQL on first start. If the
-application has already created an empty `legacy_state` row, stop and use a
-fresh recovery database or an operator-reviewed import. Do not overwrite files
-or delete database rows in an attempt to force the import.
+Keep the `Postgres` volume created by Railway. Configure Railway PostgreSQL
+backups before enabling real money movement.
 
 ## 5. Create the HTTPS domain
 
@@ -127,18 +167,18 @@ Use Railway's autocomplete when inserting reference variables.
 | Variable | Value or source | Required |
 |---|---|---|
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | Yes |
-| `PGSSLMODE` | `require` | Yes |
-| `DISCORD_TOKEN` | A newly reset bot token | Yes |
+| `PGSSLMODE` | `disable` for Railway private networking | Yes |
+| `DISCORD_TOKEN` | Leave absent until the client enters a newly reset token | Yes to start Discord |
 | `ENABLE_MESSAGE_CONTENT_INTENT` | `true` when the Discord intent is enabled; otherwise `false` | Yes |
 | `FINANCE_MODE` | `disabled` | Yes for the first deployment |
 | `PUBLIC_BASE_URL` | `https://${{RAILWAY_PUBLIC_DOMAIN}}` or the final custom HTTPS origin | Yes |
 | `TREASURY_BASE_URL` | `https://api.democracycraft.net/economy` | Yes |
 | `TOKEN_ENCRYPTION_ACTIVE_VERSION` | `v1` | Yes |
 | `TOKEN_ENCRYPTION_KEYS` | `v1:<32-byte-base64-key>` | Yes |
-| `DATA_DIR` | `/data` | Yes |
-| `BACKUP_DIR` | `/data/backups` | Yes |
-| `RAILWAY_RUN_UID` | `0` | Yes with the application volume |
+| `DATA_DIR` | `/tmp/revolution-realty` | Yes |
+| `BACKUP_DIR` | `/tmp/revolution-realty/backups` | Yes |
 | `DB_POOL_SIZE` | `8` | Recommended |
+| `PORT` | `3000` | Yes for the current generated domain target |
 
 Generate the encryption key on a trusted computer:
 
@@ -152,8 +192,7 @@ their three-dot menus after saving them. A sealed value cannot be read back
 from the Railway UI or API.
 
 Do not add `POSTGRES_PASSWORD` to the application service; it is only used by
-the local Docker Compose setup. Do not manually define `PORT`; Railway injects
-it for the deployment and health check.
+the local Docker Compose setup.
 
 The following variables are added only when their real values are available:
 
@@ -203,30 +242,12 @@ and run the command inside the deployed container:
 railway ssh -- npm run migrate:check
 ```
 
-## 8. Verify or restore existing bot data
+## 8. Initialise the fresh Discord installation
 
-Skip this section for a completely new Discord installation. Keep finance
-disabled and prevent users from changing tickets or contracts during the
-migration.
-
-For a first-time `data.json` import, follow the upload instructions in section
-4 before the first successful application start. Then run:
-
-```sh
-railway ssh -- npm run legacy:import
-```
-
-The command must report that legacy state is ready. Check representative guild
-settings, tickets, contracts, verification records and listings in Discord.
-Preserve the original `data.json` separately, record its SHA-256 hash and do not
-delete it after import.
-
-If PostgreSQL is being moved from another production deployment, restore a
-verified PostgreSQL backup into the new `Postgres` service before the first
-application start. This is the correct path when the source already contains
-financial or imported legacy state. Do not seed properties again after
-restoring an existing database. Keep the source deployment transfer-disabled
-until database counts, migrations and representative records match.
+This deployment deliberately does not migrate the obsolete bot's state. Run
+`/setup` in the target Discord server and confirm the manager roles, private
+finance/audit channel, tickets, listings, contracts and verification flows.
+Then verify the real shareholder accounts before importing properties.
 
 ## 9. Configure Discord and Treasury
 
@@ -245,7 +266,7 @@ until database counts, migrations and representative records match.
 7. Confirm `/finance connections` shows the expected owners and expiry state.
 8. Identify the exact Realty `pluginSystem` from genuine postings, set it as
    Railway's `REALTY_PLUGIN_SYSTEM` variable and redeploy while finance remains
-   disabled or shadowed. Startup writes the verified value to guild finance
+   disabled. Startup writes the verified value to guild finance
    configuration.
 9. On a fresh database, run `railway ssh -- npm run properties:preview` and
    review the complete initial ownership import. After the two connected
@@ -258,20 +279,22 @@ If `PUBLIC_BASE_URL` changes after webhooks have been registered, do not assume
 they followed the new domain. Re-register the business account webhook and have
 connected shareholders rotate/reconnect their personal integrations.
 
-## 10. Enable financial processing safely
+## 10. Enable financial processing
 
-The application is complete, but real-money execution must be enabled against
-real external accounts deliberately.
+This client rollout moves directly from `disabled` to `live`. Disabled mode
+still receives and persists events without executing transfers, so use it to
+complete the preflight rather than enabling money movement blindly.
 
-1. Set `FINANCE_MODE=shadow` and deploy.
-2. Run `/finance reconcile` and compare the imported Treasury postings,
-   ownership snapshots and proposed operations with the real account history.
-3. Verify a signed webhook, a replayed delivery, transaction-feed recovery and
-   a low-value transfer using the stored idempotency key.
-4. Confirm refund matching, reserve accounting and restart recovery.
-5. Set `FINANCE_MODE=live` only when the shadow ledger and Treasury results
-   agree.
-6. Monitor the first real rental through its seven-day hold and payout.
+1. While still disabled, run `/finance reconcile` and compare Treasury
+   postings with the real account history.
+2. Verify a genuine signed webhook, replay deduplication, transaction-feed
+   recovery, the exact Realty memo and the exact `pluginSystem`.
+3. Confirm account `120294`, ownership snapshots, refund matching, reserve
+   accounting, encrypted PERSONAL connections and restart recovery.
+4. Set `FINANCE_MODE=live` and deploy only after all checks pass.
+5. Run `/finance status`, confirm that the database and process both report
+   `live`, and monitor the first real rental through its seven-day hold and
+   payout.
 
 At any time, `/finance emergency-disable confirm:DISABLE` latches the emergency
 stop in PostgreSQL while webhooks and reconciliation continue recording events.
@@ -280,28 +303,24 @@ change.
 
 ## 11. Backups and updates
 
-Configure Railway backups for both the PostgreSQL service and the application
-volume. Use daily, weekly and monthly schedules appropriate to the account plan,
-and periodically test a restore into a separate recovery database. Keep at
-least one encrypted off-platform copy of the legacy source and PostgreSQL dump.
-
-Never wipe or delete a Railway volume as a cleanup operation: deleting a volume
-also deletes its backups. Financial records are reversed through status and
+Configure Railway backups for the PostgreSQL service. Use daily, weekly and
+monthly schedules appropriate to the account plan, and periodically test a
+restore into a separate recovery database. Keep at least one encrypted
+off-platform PostgreSQL dump. Financial records are reversed through status and
 ledger entries, never removed manually.
 
 Each push to `main` triggers a new application deployment. Before accepting an
 update:
 
 1. confirm GitHub Actions is green;
-2. create database and volume backups;
+2. create a database backup;
 3. keep the application at one replica;
 4. deploy and wait for `/readyz` to pass;
 5. run `railway ssh -- npm run migrate:check`; and
 6. verify Discord connectivity and finance mode after restart.
 
-Railway performs deployment health checks before routing traffic. Because the
-application uses a persistent volume, a short restart interruption during a
-deployment is expected.
+Railway performs deployment health checks before routing traffic. A short
+restart interruption during a deployment is expected.
 
 ## 12. Common failures
 
@@ -310,11 +329,6 @@ deployment is expected.
 Read the `missing` array. Check `DATABASE_URL`, `PUBLIC_BASE_URL`, the database
 service health and, outside disabled mode, the Treasury/encryption variables and
 guild finance configuration.
-
-### `EACCES` or failure writing `/data`
-
-Confirm the volume mount is `/data` and `RAILWAY_RUN_UID=0` is present. Redeploy
-after correcting it.
 
 ### The domain returns 404
 
